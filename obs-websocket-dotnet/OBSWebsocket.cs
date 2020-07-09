@@ -32,6 +32,7 @@ using System.Threading.Tasks;
 using OBSWebsocketDotNet.Types;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace OBSWebsocketDotNet
 {
@@ -244,6 +245,20 @@ namespace OBSWebsocketDotNet
         /// </summary>
         public WebSocket WSConnection { get; private set; }
 
+        private TimeSpan _requestTimeout;
+
+        public TimeSpan RequestTimeout
+        {
+            get { return _requestTimeout; }
+            set
+            {
+                if (value < TimeSpan.Zero)
+                    value = TimeSpan.Zero;
+                _requestTimeout = value;
+            }
+        }
+
+
         private delegate void RequestCallback(OBSWebsocket sender, JObject body);
         protected ConcurrentDictionary<string, TaskCompletionSource<JObject>> _responseHandlers;
         protected TaskCompletionSource<bool> ConnectingTaskSource;
@@ -384,8 +399,8 @@ namespace OBSWebsocketDotNet
         public void Disconnect()
         {
             WebSocket connection = WSConnection;
-            if (connection != null 
-                && (connection.State == WebSocketState.Open 
+            if (connection != null
+                && (connection.State == WebSocketState.Open
                     || connection.State == WebSocketState.Connecting))
             {
                 connection.Close();
@@ -450,6 +465,8 @@ namespace OBSWebsocketDotNet
                 ProcessEventType(eventType, body);
             }
         }
+        public Task<JObject> SendRequest(string requestType, CancellationToken cancellationToken) => SendRequest(requestType, null, cancellationToken);
+        public Task<JObject> SendRequest(string requestType, JObject additionalFields = null) => SendRequest(requestType, additionalFields, CancellationToken.None);
 
         /// <summary>
         /// Sends a message to the websocket API with the specified request type and optional parameters
@@ -457,7 +474,7 @@ namespace OBSWebsocketDotNet
         /// <param name="requestType">obs-websocket request type, must be one specified in the protocol specification</param>
         /// <param name="additionalFields">additional JSON fields if required by the request type</param>
         /// <returns>The server's JSON response as a JObject</returns>
-        public async Task<JObject> SendRequest(string requestType, JObject additionalFields = null)
+        public async Task<JObject> SendRequest(string requestType, JObject additionalFields, CancellationToken cancellationToken)
         {
             string messageID;
 
@@ -493,14 +510,29 @@ namespace OBSWebsocketDotNet
                     break;
                 }
             } while (true);
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                cancellationToken.Register(() => tcs.TrySetCanceled());
+            }
+
             // Send the message and wait for a response
             // (received and notified by the websocket response handler)
-
+            TimeSpan timeout = RequestTimeout;
             WSConnection.Send(body.ToString());
             JObject result = null;
             try
             {
-                result = await tcs.Task.ConfigureAwait(false);
+                if (timeout > TimeSpan.Zero)
+                {
+                    Task delay = Task.Delay(timeout);
+                    Task t = await Task.WhenAny(tcs.Task, delay).ConfigureAwait(false);
+                    if (t == delay)
+                        throw new ErrorResponseException("Request timed out.");
+                    result = await tcs.Task;
+                }
+                else
+                    result = await tcs.Task.ConfigureAwait(false);
             }
             catch (TaskCanceledException)
             {
