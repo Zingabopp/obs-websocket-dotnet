@@ -161,7 +161,7 @@ namespace OBSWebsocketDotNet.Types
         public readonly ReplayOutputSettings Settings;
 
         /// <summary>
-        /// Creates a new <see cref="ReplayOutput"/> from a <see cref="JObject"/>.
+        /// Creates a new <see cref="ReplayOutputInfo"/> from a <see cref="JObject"/>.
         /// </summary>
         /// <param name="response"></param>
         public ReplayOutputInfo(JObject response)

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
 		<AssemblyName>obs-websocket-dotnet</AssemblyName>
 		<RootNamespace>OBSWebsocketDotNet</RootNamespace>
 		<Copyright>Copyright © Stéphane Lepin 2020</Copyright>
